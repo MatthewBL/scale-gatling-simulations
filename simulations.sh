@@ -10,7 +10,7 @@ cases=(
 for c in "${cases[@]}"; do
   read -r name basic standard pro <<< "$c"
   runId="${name}-$(date +%Y%m%d%H%M%S)"
-  mvn gatling:test \
+  ./mvnw gatling:test \
     "-Dgatling.runId=$runId" \
     "-DBASIC_UNITS_PER_MINUTE=$basic" \
     "-DSTANDARD_UNITS_PER_MINUTE=$standard" \
