@@ -1,0 +1,30 @@
+target/
+.vscode/
+.idea/
+*.iml
+.env
+
+# Maven/Java/Scala build artifacts
+*.class
+*.jar
+*.war
+*.ear
+hs_err_pid*
+
+# Scala tooling
+.metals/
+.bloop/
+.ammonite/
+.scala-build/
+
+# Eclipse/STS
+.classpath
+.project
+.settings/
+
+# Logs
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
