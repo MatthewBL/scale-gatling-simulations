@@ -19,9 +19,9 @@ import scala.jdk.CollectionConverters._
 class BasicLLMUsersSimulation extends Simulation {
   private val config = SimulationConfig.load()
   private val random = new Random()
+  private val baseUrls = config.effectiveBaseUrls
 
   private val httpProtocol = http
-    .baseUrl(config.baseUrl)
     .acceptHeader("application/json")
     .contentTypeHeader("application/json")
 
@@ -54,8 +54,12 @@ class BasicLLMUsersSimulation extends Simulation {
     Seq(status.in(200, 201, 202, 204))
   }
   private val userFeeder = config.userAssignments.iterator.map { assignment =>
+    val baseUrl = baseUrls(assignment.index % baseUrls.size)
+    val requestUrl = joinUrl(baseUrl, config.endpointPath)
     Map(
       "userIndex" -> assignment.index,
+      "baseUrl" -> baseUrl,
+      "requestUrl" -> requestUrl,
       "userType" -> assignment.userType,
       "usageType" -> assignment.usageType,
       "hourlyRequests" -> assignment.hourlyRequests,
@@ -84,7 +88,7 @@ class BasicLLMUsersSimulation extends Simulation {
         }
       }.exec(
         http("llm-request")
-          .post(config.endpointPath)
+          .post("#{requestUrl}")
           .body(StringBody(requestBody))
           .check(responseChecks: _*)
       ).exec { session =>
@@ -122,6 +126,12 @@ class BasicLLMUsersSimulation extends Simulation {
       .replace("\n", "\\n")
       .replace("\r", "\\r")
       .replace("\t", "\\t")
+  }
+
+  private def joinUrl(baseUrl: String, endpointPath: String): String = {
+    val trimmedBase = if (baseUrl.endsWith("/")) baseUrl.dropRight(1) else baseUrl
+    val trimmedPath = if (endpointPath.startsWith("/")) endpointPath else s"/$endpointPath"
+    s"$trimmedBase$trimmedPath"
   }
 
   private lazy val fallbackRunId: String =

@@ -15,13 +15,14 @@ mvn gatling:test
 
 You can override the defaults with system properties or environment variables:
 
-- baseUrl or BASE_URL (default: http://localhost:8080)
-- endpointPath or ENDPOINT_PATH (default: /)
+- LLM_URL (default: http://localhost:8080)
+- ENDPOINT_PATH (default: /)
+- SSH_TUNNELS (optional comma-separated list of base URLs; if set, users are evenly distributed across them)
 
 Example:
 
 ```
-mvn gatling:test -DbaseUrl=http://localhost:8080 -DendpointPath=/v1/chat/completions
+mvn gatling:test -DLLM_URL=http://localhost:8080 -DENDPOINT_PATH=/v1/chat/completions
 ```
 
 ## Notes

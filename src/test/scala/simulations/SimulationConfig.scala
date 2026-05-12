@@ -10,6 +10,7 @@ import scala.util.Try
 
 final case class SimulationConfig(
   baseUrl: String,
+  tunnelUrls: Vector[String],
   endpointPath: String,
   modelId: String,
   captureResponses: Boolean,
@@ -33,6 +34,10 @@ final case class SimulationConfig(
   minOutputLength: Int,
   maxOutputLength: Int
 ) {
+  def effectiveBaseUrls: Vector[String] = {
+    if (tunnelUrls.nonEmpty) tunnelUrls else Vector(baseUrl)
+  }
+
   def userAssignments: Vector[UserAssignment] = {
     val total = math.max(0, totalUsers)
     val basicCount = math.min(total, math.floor(total * basicShare).toInt)
@@ -104,11 +109,18 @@ object SimulationConfig {
     val rawEndpointPath = read("ENDPOINT_PATH", "/")
     val rawModelsEndpoint = read("MODELS_ENDPOINT", "/v1/models")
     val baseUrl = normalizeBaseUrl(rawBaseUrl)
+    val rawTunnelUrls = readList("SSH_TUNNELS") match {
+      case urls if urls.nonEmpty => urls
+      case _ => readList("TUNNEL_URLS")
+    }
+    val tunnelUrls = rawTunnelUrls.map(normalizeBaseUrl).distinct
+    val modelResolutionBaseUrl = tunnelUrls.headOption.getOrElse(baseUrl)
     val endpointPath = normalizeEndpointPath(rawEndpointPath)
-    val modelId = resolveModelId(baseUrl, rawModelsEndpoint)
+    val modelId = resolveModelId(modelResolutionBaseUrl, rawModelsEndpoint)
 
     SimulationConfig(
       baseUrl = baseUrl,
+      tunnelUrls = tunnelUrls,
       endpointPath = endpointPath,
       modelId = modelId,
       captureResponses = readBoolean("CAPTURE_RESPONSES", false),
@@ -156,6 +168,14 @@ object SimulationConfig {
       case "false" | "0" | "no" | "n" => false
       case _ => defaultValue
     }
+  }
+
+  private def readList(key: String): Vector[String] = {
+    read(key, "")
+      .split(",")
+      .toVector
+      .map(_.trim)
+      .filter(_.nonEmpty)
   }
 
   private def normalizeBaseUrl(value: String): String = {
