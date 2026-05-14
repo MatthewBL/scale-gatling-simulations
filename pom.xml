@@ -76,18 +76,18 @@
       </plugin>
     </plugins>
   </build>
+  
+  <repositories>
+      <repository>
+          <id>project-local-repo</id>
+          <url>file://${project.basedir}/local-repo</url>
+      </repository>
+  </repositories>
+
+  <pluginRepositories>
+      <pluginRepository>
+          <id>project-local-repo</id>
+          <url>file://${project.basedir}/local-repo</url>
+      </pluginRepository>
+  </pluginRepositories>
 </project>
-
-<repositories>
-    <repository>
-        <id>project-local-repo</id>
-        <url>file://${project.basedir}/local-repo</url>
-    </repository>
-</repositories>
-
-<pluginRepositories>
-    <pluginRepository>
-        <id>project-local-repo</id>
-        <url>file://${project.basedir}/local-repo</url>
-    </pluginRepository>
-</pluginRepositories>
