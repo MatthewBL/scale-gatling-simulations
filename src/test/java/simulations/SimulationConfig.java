@@ -276,7 +276,12 @@ public final class SimulationConfig {
 
     String modelResolutionBaseUrl = tunnelUrls.isEmpty() ? baseUrl : tunnelUrls.get(0);
     String endpointPath = normalizeEndpointPath(rawEndpointPath);
-    String modelId = resolveModelId(modelResolutionBaseUrl, rawModelsEndpoint);
+    // An explicit model keeps the same simulation portable across OpenAI-compatible
+    // servers (for example a local llama/Ollama instance and vLLM on the HPC).
+    String configuredModelId = read("MODEL_ID", "").trim();
+    String modelId = configuredModelId.isEmpty()
+      ? resolveModelId(modelResolutionBaseUrl, rawModelsEndpoint)
+      : configuredModelId;
 
     return new SimulationConfig(
       baseUrl,
