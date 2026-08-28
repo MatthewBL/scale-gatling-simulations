@@ -15,6 +15,18 @@ LLM_URL=http://localhost:11434 ./run-step-rate.sh
 `run-step-rate.sh` sets a 4 GiB Java heap and attempts to raise `ulimit -n` to
 65535 before starting Gatling. Make it executable once with `chmod +x run-step-rate.sh`.
 
+To submit the same experiment as a background SLURM job on Rocky Linux:
+
+```bash
+chmod u+x run-step-rate.sh submit_step_rate.sbatch
+sbatch submit_step_rate.sbatch
+```
+
+SLURM writes output to `gatling-step-rate-<job-id>.out` and errors to
+`gatling-step-rate-<job-id>.err`. The batch script loads Java 11 when the
+cluster provides an `openjdk/11` module, then uses the bundled offline Maven
+repository through `run-step-rate.sh`.
+
 ## Configuration
 
 You can override the defaults with system properties or environment variables:
