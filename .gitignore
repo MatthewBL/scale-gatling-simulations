@@ -30,3 +30,6 @@ Thumbs.db
 
 # Results
 results/
+
+# Target
+target/
