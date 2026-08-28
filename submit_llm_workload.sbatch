@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-#SBATCH --job-name=gatling-step-rate
-#SBATCH --output=gatling-step-rate-%j.out
-#SBATCH --error=gatling-step-rate-%j.err
+#SBATCH --job-name=gatling-llm-workload
+#SBATCH --output=gatling-llm-workload-%j.out
+#SBATCH --error=gatling-llm-workload-%j.err
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=4
@@ -33,4 +33,4 @@ echo "SLURM job: ${SLURM_JOB_ID:-unknown}"
 echo "Node: ${SLURM_JOB_NODELIST:-unknown}"
 echo "Working directory: $ROOT_DIR"
 
-exec bash "$ROOT_DIR/run-step-rate.sh"
+exec bash "$ROOT_DIR/run-llm-workload.sh"

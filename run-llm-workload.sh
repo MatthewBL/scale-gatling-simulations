@@ -73,7 +73,7 @@ for case in "${cases[@]}"; do
       -DSTANDARD_UNITS_PER_MINUTE="$standardUnits" \
       -DPRO_UNITS_PER_MINUTE="$proUnits" \
       -jar target/gatling-llm-simulations-0.1.0-SNAPSHOT.jar \
-      -s simulations.StepRateLLMSimulation -rf target/gatling
+      -s simulations.LLMWorkloadSimulation -rf target/gatling
   else
     sh ./mvnw -o \
       -Dmaven.repo.local="$ROOT_DIR/local-repo" \
@@ -82,6 +82,6 @@ for case in "${cases[@]}"; do
       -DSTANDARD_UNITS_PER_MINUTE="$standardUnits" \
       -DPRO_UNITS_PER_MINUTE="$proUnits" \
       gatling:test \
-      -Dgatling.simulationClass=simulations.StepRateLLMSimulation
+      -Dgatling.simulationClass=simulations.LLMWorkloadSimulation
   fi
 done

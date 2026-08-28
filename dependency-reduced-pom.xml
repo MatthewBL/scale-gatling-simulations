@@ -19,7 +19,7 @@
         <artifactId>gatling-maven-plugin</artifactId>
         <version>4.3.0</version>
         <configuration>
-          <simulationClass>simulations.BasicLLMUsersSimulation</simulationClass>
+          <simulationClass>simulations.LLMWorkloadSimulation</simulationClass>
         </configuration>
       </plugin>
       <plugin>

@@ -2,10 +2,11 @@ package simulations;
 
 import io.gatling.javaapi.core.ActionBuilder;
 import io.gatling.javaapi.core.CheckBuilder;
-import io.gatling.javaapi.core.ScenarioContext;
+import io.gatling.javaapi.core.ChainBuilder;
 import io.gatling.javaapi.core.Session;
 import io.gatling.javaapi.core.ScenarioBuilder;
 import io.gatling.javaapi.core.Simulation;
+import io.gatling.core.structure.ScenarioContext;
 import io.gatling.javaapi.http.HttpProtocolBuilder;
 import com.typesafe.scalalogging.Logger;
 import com.typesafe.scalalogging.Logger$;

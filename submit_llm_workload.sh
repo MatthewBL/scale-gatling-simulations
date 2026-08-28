@@ -9,4 +9,4 @@ if [[ -z "$TARGET_NODE" ]]; then
   exit 1
 fi
 
-exec sbatch --nodelist="$TARGET_NODE" "$ROOT_DIR/submit_step_rate.sbatch"
+exec sbatch --nodelist="$TARGET_NODE" "$ROOT_DIR/submit_llm_workload.sbatch"
