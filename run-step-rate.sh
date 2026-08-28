@@ -24,13 +24,13 @@ fi
 
 export LLM_URL="${LLM_URL:-http://localhost:11434}"
 export ENDPOINT_PATH="${ENDPOINT_PATH:-/v1/completions}"
-export MODEL_ID="${MODEL_ID:-gemma4:31b}"
+export MODELS_ENDPOINT="${MODELS_ENDPOINT:-/v1/models}"
 export INITIAL_RATE="${INITIAL_RATE:-1}"
 export RATE_INCREMENT="${RATE_INCREMENT:-1}"
 export RATE_LEVELS="${RATE_LEVELS:-5}"
 export LEVEL_DURATION_SECONDS="${LEVEL_DURATION_SECONDS:-60}"
 
-echo "Target: $LLM_URL$ENDPOINT_PATH (model: $MODEL_ID)"
+echo "Target: $LLM_URL$ENDPOINT_PATH (model discovered from $LLM_URL$MODELS_ENDPOINT)"
 echo "Steps: $RATE_LEVELS levels, start=$INITIAL_RATE req/s, increment=$RATE_INCREMENT req/s, duration=$LEVEL_DURATION_SECONDS s"
 echo "Generator: JAVA_OPTS=$JAVA_OPTS, open files=$(ulimit -n)"
 

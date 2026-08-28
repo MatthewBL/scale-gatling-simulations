@@ -9,7 +9,7 @@ simulation for OpenAI-compatible LLM servers (local llama/Ollama and vLLM).
 2. Run the step-rate experiment on Linux/macOS/WSL:
 
 ```bash
-MODEL_ID=gemma4:31b LLM_URL=http://localhost:11434 ./run-step-rate.sh
+LLM_URL=http://localhost:11434 ./run-step-rate.sh
 ```
 
 `run-step-rate.sh` sets a 4 GiB Java heap and attempts to raise `ulimit -n` to
@@ -19,9 +19,9 @@ MODEL_ID=gemma4:31b LLM_URL=http://localhost:11434 ./run-step-rate.sh
 
 You can override the defaults with system properties or environment variables:
 
-- LLM_URL (default: http://localhost:8080)
-- ENDPOINT_PATH (default: /)
-- MODEL_ID (when set, skips automatic `/v1/models` discovery)
+- LLM_URL (default: http://localhost:11434)
+- ENDPOINT_PATH (default: /v1/completions)
+- MODELS_ENDPOINT (default: /v1/models; the first model `id` returned by this endpoint is used)
 - SSH_TUNNELS (optional comma-separated list of base URLs; if set, users are evenly distributed across them)
 
 Example:
@@ -47,11 +47,11 @@ threshold or KO responses appear is the capacity ceiling. Gatling assertions
 also make the process exit unsuccessfully when the global p95/KO limits fail.
 
 To point the identical experiment back at vLLM on the HPC (directly or through
-an SSH tunnel), only change target/model values:
+an SSH tunnel), only change the target URL:
 
 ```bash
-LLM_URL=http://localhost:8000 MODEL_ID=/models/gemma-model \
-ENDPOINT_PATH=/v1/completions ./run-step-rate.sh
+LLM_URL=http://localhost:8000 ENDPOINT_PATH=/v1/completions \
+MODELS_ENDPOINT=/v1/models ./run-step-rate.sh
 ```
 
 Both backends must expose an OpenAI-compatible completions endpoint. The request

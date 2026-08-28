@@ -5,9 +5,15 @@ import io.gatling.javaapi.core.ScenarioBuilder;
 import io.gatling.javaapi.core.Simulation;
 import io.gatling.javaapi.http.HttpProtocolBuilder;
 
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import static io.gatling.javaapi.core.CoreDsl.*;
 import static io.gatling.javaapi.http.HttpDsl.*;
@@ -48,9 +54,40 @@ public class StepRateLLMSimulation extends Simulation {
     return normalizedBase + normalizedPath;
   }
 
+  private static String resolveModelId(String baseUrl, String modelsEndpoint) {
+    String modelsUrl = joinUrl(baseUrl, modelsEndpoint);
+    HttpClient client = HttpClient.newBuilder()
+      .connectTimeout(Duration.ofSeconds(5))
+      .build();
+    HttpRequest request = HttpRequest.newBuilder()
+      .uri(URI.create(modelsUrl))
+      .timeout(Duration.ofSeconds(10))
+      .GET()
+      .build();
+
+    final HttpResponse<String> response;
+    try {
+      response = client.send(request, HttpResponse.BodyHandlers.ofString());
+    } catch (Exception ex) {
+      throw new IllegalStateException("Failed to fetch model id from " + modelsUrl + ".", ex);
+    }
+
+    if (response.statusCode() / 100 != 2) {
+      throw new IllegalStateException(
+        "Failed to fetch model id from " + modelsUrl + " (status " + response.statusCode() + ")."
+      );
+    }
+
+    Matcher matcher = Pattern.compile("\\\"id\\\"\\s*:\\s*\\\"([^\\\"]+)\\\"").matcher(response.body());
+    if (matcher.find()) {
+      return matcher.group(1);
+    }
+    throw new IllegalStateException("Could not parse model id from " + modelsUrl + " response.");
+  }
+
   private final String baseUrl = value("LLM_URL", "http://localhost:11434");
   private final String endpoint = value("ENDPOINT_PATH", "/v1/completions");
-  private final String model = value("MODEL_ID", "gemma4:31b");
+  private final String model = resolveModelId(baseUrl, value("MODELS_ENDPOINT", "/v1/models"));
   private final int initialRate = intValue("INITIAL_RATE", 1);
   private final int rateIncrement = intValue("RATE_INCREMENT", 1);
   private final int levels = intValue("RATE_LEVELS", 5);
