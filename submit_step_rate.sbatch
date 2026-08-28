@@ -7,6 +7,7 @@
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=8G
 #SBATCH --time=04:00:00
+#SBATCH --nodelist=c06
 
 set -euo pipefail
 

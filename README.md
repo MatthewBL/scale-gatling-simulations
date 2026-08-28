@@ -19,8 +19,12 @@ To submit the same experiment as a background SLURM job on Rocky Linux:
 
 ```bash
 chmod u+x run-step-rate.sh submit_step_rate.sbatch submit_step_rate.sh
-TARGET_NODE=gpu06 ./submit_step_rate.sh
+sbatch submit_step_rate.sbatch
 ```
+
+The batch file defaults to node `c06`. Override it for a single submission
+with `sbatch --nodelist=c07 submit_step_rate.sbatch`, or use the wrapper when
+you want to select the node through `TARGET_NODE` or an argument.
 
 The node can also be provided as an argument:
 
