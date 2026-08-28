@@ -42,7 +42,6 @@ ENDPOINT_PATH=/v1/completions
 MODELS_ENDPOINT=/v1/models
 SIMULATION_MINUTES=60
 USER_RAMP_MINUTES=30
-TOTAL_USERS=50000
 FIRST_REQUEST_BATCH_SIZE=500
 FIRST_REQUEST_TURN_INTERVAL_SECONDS=2
 ```
@@ -54,9 +53,9 @@ bare host and port to `http://...`. The model is discovered automatically from
 The provisioning values use this format:
 
 ```dotenv
-UNDER_PROVISIONING_TEST=1,1,1
+UNDER_PROVISIONING_TEST=120,150,200
 OVER_PROVISIONING_TEST=10000,10000,10000
-FINE_TUNED_TEST=100,100,100
+FINE_TUNED_TEST=300,450,600
 ```
 
 Each triplet is `basic,standard,pro` units per minute.
