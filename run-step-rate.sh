@@ -31,6 +31,7 @@ export RATE_LEVELS="${RATE_LEVELS:-5}"
 export LEVEL_DURATION_SECONDS="${LEVEL_DURATION_SECONDS:-60}"
 
 echo "Target: $LLM_URL$ENDPOINT_PATH (model discovered from $LLM_URL$MODELS_ENDPOINT)"
+echo "Model: $MODEL_NAME"
 echo "Steps: $RATE_LEVELS levels, start=$INITIAL_RATE req/s, increment=$RATE_INCREMENT req/s, duration=$LEVEL_DURATION_SECONDS s"
 echo "Generator: JAVA_OPTS=$JAVA_OPTS, open files=$(ulimit -n)"
 
