@@ -18,9 +18,19 @@ LLM_URL=http://localhost:11434 ./run-step-rate.sh
 To submit the same experiment as a background SLURM job on Rocky Linux:
 
 ```bash
-chmod u+x run-step-rate.sh submit_step_rate.sbatch
-sbatch submit_step_rate.sbatch
+chmod u+x run-step-rate.sh submit_step_rate.sbatch submit_step_rate.sh
+TARGET_NODE=gpu06 ./submit_step_rate.sh
 ```
+
+The node can also be provided as an argument:
+
+```bash
+./submit_step_rate.sh gpu07
+```
+
+The argument takes precedence over `TARGET_NODE`. The wrapper passes the value
+to SLURM as `--nodelist`; a variable inside the `.sbatch` file cannot be used
+for this because SLURM parses `#SBATCH` directives before running the script.
 
 SLURM writes output to `gatling-step-rate-<job-id>.out` and errors to
 `gatling-step-rate-<job-id>.err`. The batch script loads Java 11 when the
