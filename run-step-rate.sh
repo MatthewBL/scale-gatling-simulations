@@ -45,4 +45,7 @@ if [[ -f target/gatling-llm-simulations-0.1.0-SNAPSHOT.jar && "${USE_JAR:-false}
 fi
 
 export MAVEN_OPTS="${MAVEN_OPTS:-} $JAVA_OPTS"
-exec ./mvnw gatling:test -Dgatling.simulationClass=simulations.StepRateLLMSimulation
+exec sh ./mvnw -o \
+  -Dmaven.repo.local="$ROOT_DIR/local-repo" \
+  gatling:test \
+  -Dgatling.simulationClass=simulations.StepRateLLMSimulation
