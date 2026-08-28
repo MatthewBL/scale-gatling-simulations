@@ -33,3 +33,7 @@ results/
 
 # Target
 target/
+
+# Logs
+*.log
+*.err
