@@ -10,7 +10,7 @@
 
 set -euo pipefail
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT_DIR="${SLURM_SUBMIT_DIR}"
 cd "$ROOT_DIR"
 
 # Adjust this module name if the cluster exposes a different Java 11 module.
