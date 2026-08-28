@@ -30,6 +30,8 @@ export RATE_INCREMENT="${RATE_INCREMENT:-1}"
 export RATE_LEVELS="${RATE_LEVELS:-5}"
 export LEVEL_DURATION_SECONDS="${LEVEL_DURATION_SECONDS:-60}"
 
+export MODEL_NAME="${MODEL_NAME:-$(curl -s "$LLM_URL$MODELS_ENDPOINT" | jq -r '.data[0].id')}"
+
 echo "Target: $LLM_URL$ENDPOINT_PATH (model discovered from $LLM_URL$MODELS_ENDPOINT)"
 echo "Model: $MODEL_NAME"
 echo "Steps: $RATE_LEVELS levels, start=$INITIAL_RATE req/s, increment=$RATE_INCREMENT req/s, duration=$LEVEL_DURATION_SECONDS s"
