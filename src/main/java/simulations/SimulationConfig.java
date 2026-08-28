@@ -60,6 +60,9 @@ public final class SimulationConfig {
   private final String prompt;
   private final int minOutputLength;
   private final int maxOutputLength;
+  private final int userRampMinutes;
+  private final int firstRequestBatchSize;
+  private final int firstRequestTurnIntervalSeconds;
 
   public SimulationConfig(
     String baseUrl,
@@ -85,7 +88,10 @@ public final class SimulationConfig {
     int unitsPerRequest,
     String prompt,
     int minOutputLength,
-    int maxOutputLength
+    int maxOutputLength,
+    int userRampMinutes,
+    int firstRequestBatchSize,
+    int firstRequestTurnIntervalSeconds
   ) {
     this.baseUrl = baseUrl;
     this.tunnelUrls = Collections.unmodifiableList(new ArrayList<>(tunnelUrls));
@@ -111,6 +117,9 @@ public final class SimulationConfig {
     this.prompt = prompt;
     this.minOutputLength = minOutputLength;
     this.maxOutputLength = maxOutputLength;
+    this.userRampMinutes = userRampMinutes;
+    this.firstRequestBatchSize = firstRequestBatchSize;
+    this.firstRequestTurnIntervalSeconds = firstRequestTurnIntervalSeconds;
   }
 
   public String getBaseUrl() {
@@ -207,6 +216,18 @@ public final class SimulationConfig {
 
   public int getMaxOutputLength() {
     return maxOutputLength;
+  }
+
+  public int getUserRampMinutes() {
+    return userRampMinutes;
+  }
+
+  public int getFirstRequestBatchSize() {
+    return firstRequestBatchSize;
+  }
+
+  public int getFirstRequestTurnIntervalSeconds() {
+    return firstRequestTurnIntervalSeconds;
   }
 
   public List<String> effectiveBaseUrls() {
@@ -307,7 +328,10 @@ public final class SimulationConfig {
       readInt("UNITS_PER_REQUEST", 1),
       read("LLM_PROMPT", "Hello"),
       readInt("MIN_OUTPUT_LENGTH", 0),
-      readInt("MAX_OUTPUT_LENGTH", 256)
+      readInt("MAX_OUTPUT_LENGTH", 256),
+      readInt("USER_RAMP_MINUTES", 30),
+      readInt("FIRST_REQUEST_BATCH_SIZE", 500),
+      readInt("FIRST_REQUEST_TURN_INTERVAL_SECONDS", 2)
     );
   }
 
