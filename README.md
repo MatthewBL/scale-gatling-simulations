@@ -53,9 +53,9 @@ bare host and port to `http://...`. The model is discovered automatically from
 The provisioning values use this format:
 
 ```dotenv
-UNDER_PROVISIONING_TEST=2,2.5,3.33      
+UNDER_PROVISIONING_TEST=2,3,4
 OVER_PROVISIONING_TEST=10000,10000,10000
-FINE_TUNED_TEST=5,7.5,10                
+FINE_TUNED_TEST=5,8,10                
 ```
 
 Each triplet is `basic,standard,pro` units per minute.
