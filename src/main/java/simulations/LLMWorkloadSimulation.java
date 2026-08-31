@@ -15,6 +15,9 @@ import io.gatling.core.action.Action;
 import io.gatling.core.stats.StatsEngine;
 import org.slf4j.LoggerFactory;
 import scala.Option;
+import simulations.schedule.UniformWorkloadTrendStrategy;
+import simulations.schedule.UserWorkloadSchedule;
+import simulations.schedule.WorkloadScheduleGenerator;
 
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -26,6 +29,7 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -104,6 +108,25 @@ public class LLMWorkloadSimulation extends Simulation {
   private final String endpoint = config.getEndpointPath();
   private final String model = config.getModelId();
   private final int unitsPerRequest = intValue("UNITS_PER_REQUEST", config.getUnitsPerRequest());
+  
+  // Generate workload schedules before simulation starts
+  private final Map<Integer, UserWorkloadSchedule> workloadSchedules = generateWorkloadSchedules();
+
+  private Map<Integer, UserWorkloadSchedule> generateWorkloadSchedules() {
+    WorkloadScheduleGenerator generator = new WorkloadScheduleGenerator(
+      new Random(42), // Use fixed seed for reproducibility
+      new UniformWorkloadTrendStrategy(new Random(42)),
+      config.getLooseness(),
+      config.getSimulationMinutes()
+    );
+    
+    List<UserWorkloadSchedule> schedules = generator.generateSchedules(config.userAssignments());
+    Map<Integer, UserWorkloadSchedule> scheduleMap = new HashMap<>(schedules.size());
+    for (UserWorkloadSchedule schedule : schedules) {
+      scheduleMap.put(schedule.getUserIndex(), schedule);
+    }
+    return scheduleMap;
+  }
 
   private final String body = String.format(
     "{\"model\":\"%s\",\"prompt\":\"%s\",\"min_tokens\":%d,\"max_tokens\":%d}",
@@ -113,13 +136,14 @@ public class LLMWorkloadSimulation extends Simulation {
   private final Iterator<Map<String, Object>> userFeeder = config.userAssignments().stream()
     .map(assignment -> {
       String selectedBaseUrl = baseUrls.get(assignment.getIndex() % baseUrls.size());
+      UserWorkloadSchedule schedule = workloadSchedules.get(assignment.getIndex());
       Map<String, Object> record = new HashMap<>();
       record.put("userIndex", assignment.getIndex());
       record.put("requestUrl", joinUrl(selectedBaseUrl, endpoint));
-      record.put("hourlyRequests", assignment.getHourlyRequests());
-      record.put("targetRequests", targetRequests(assignment.getHourlyRequests()));
+      record.put("targetRequests", schedule.getTargetRequests());
       record.put("requestIndex", 0);
       record.put("remainingUnits", assignment.getInitialUnits());
+      record.put("workloadSchedule", schedule);
       return record;
     }).iterator();
   private final List<CheckBuilder> checks = Arrays.asList(status().in(200, 201, 202, 204));
@@ -137,12 +161,19 @@ public class LLMWorkloadSimulation extends Simulation {
   private final ScenarioBuilder scenario = scenario("LLM step-rate capacity")
     .feed(userFeeder)
     .exec(rendezVous(config.getTotalUsers()))
-    .pause(session -> firstRequestDelay(session.getInt("userIndex")))
+    .pause(session -> {
+      UserWorkloadSchedule schedule = (UserWorkloadSchedule) session.get("workloadSchedule");
+      return Duration.ofMillis(schedule.getFirstRequestDelayMs());
+    })
     .repeat("#{targetRequests}").on(
       doIf(session -> session.getInt("targetRequests") > 0)
         .then(
           doIf(session -> session.getInt("requestIndex") > 0)
-            .then(pause(session -> requestInterval(session.getDouble("hourlyRequests"))))
+            .then(pause(session -> {
+              UserWorkloadSchedule schedule = (UserWorkloadSchedule) session.get("workloadSchedule");
+              int requestIndex = session.getInt("requestIndex");
+              return Duration.ofMillis(schedule.getRequestIntervalMs(requestIndex - 1));
+            }))
           .exec(requestAttempt)
           .exec(session -> session.set("requestIndex", session.getInt("requestIndex") + 1))
         )
@@ -150,29 +181,12 @@ public class LLMWorkloadSimulation extends Simulation {
 
   public LLMWorkloadSimulation() {
     if (config.getSimulationMinutes() <= 0 || config.getTotalUsers() < 0 || unitsPerRequest <= 0
-      || config.getUserRampMinutes() <= 0 || config.getFirstRequestBatchSize() <= 0
-      || config.getFirstRequestTurnIntervalSeconds() < 0) {
-      throw new IllegalArgumentException("SIMULATION_MINUTES, USER_RAMP_MINUTES, and FIRST_REQUEST_BATCH_SIZE must be positive; interval and TOTAL_USERS cannot be negative");
+      || config.getUserRampMinutes() <= 0 || config.getLooseness() < 0) {
+      throw new IllegalArgumentException("SIMULATION_MINUTES, TOTAL_USERS, USER_RAMP_MINUTES, and LOOSENESS must be non-negative");
     }
     setUp(scenario.injectOpen(
       rampUsers(config.getTotalUsers()).during(Duration.ofMinutes(config.getUserRampMinutes()))
     )).protocols(protocol);
-  }
-
-  private Duration firstRequestDelay(int userIndex) {
-    int turn = userIndex / config.getFirstRequestBatchSize();
-    return Duration.ofSeconds((long) turn * config.getFirstRequestTurnIntervalSeconds());
-  }
-
-  private int targetRequests(double hourlyRequests) {
-    return Math.max(0, (int) Math.round(hourlyRequests * config.getSimulationMinutes() / 60.0));
-  }
-
-  private Duration requestInterval(double hourlyRequests) {
-    int requests = targetRequests(hourlyRequests);
-    if (requests <= 1) return Duration.ZERO;
-    long experimentMillis = config.getSimulationMinutes() * 60_000L;
-    return Duration.ofMillis(Math.round((double) experimentMillis / (requests - 1)));
   }
 
   private static final class InsufficientUnitsAction implements Action {

@@ -109,18 +109,34 @@ or use the helper:
 SLURM writes logs to `gatling-llm-workload-<job-id>.out` and
 `gatling-llm-workload-<job-id>.err`.
 
-## Workload timing
+## Workload Timing & Generation
 
-Users arrive evenly during `USER_RAMP_MINUTES` and send no requests during
-that phase. After all users arrive, first requests are released in batches:
-`FIRST_REQUEST_BATCH_SIZE` users every
-`FIRST_REQUEST_TURN_INTERVAL_SECONDS` seconds. Subsequent requests follow the
-configured low/high profile rate. Only the measured workload lasts
-`SIMULATION_MINUTES`; ramp time is not included in quota calculation.
+Before the simulation starts, a modular workload schedule generator creates a precise request schedule for each user. This approach offers several advantages:
 
-For 50,000 users, a 30-minute ramp introduces approximately 27.8 users per
-second. The generator must still have enough memory and file descriptors to
-maintain all active users.
+**Request Timing Distribution**
+Users receive randomized request schedules distributed uniformly throughout the simulation duration. This prevents large gaps while maintaining consistent overall workload.
+
+**Looseness Parameter**
+Each user's request count can vary around their assigned profile using the `LOOSENESS` environment variable:
+- Defined as a percentage (0-100)
+- Example: If a user's low profile is 10 requests/hour and `LOOSENESS=20`, they might send 8, 9, 10, 11, or 12 requests
+- Default: 0 (no variation)
+
+**First-Request Behavior**
+After the ramp-up phase completes, users begin sending requests at random intervals instead of in rigid batches. This creates a more realistic initial load pattern.
+
+**User Ramp-up Phase**
+Users arrive evenly during `USER_RAMP_MINUTES` and send no requests during that phase. After all users arrive, they begin sending requests according to their generated schedules.
+
+For example, with 50,000 users and a 30-minute ramp:
+- ~27.8 users per second join the simulation
+- All requests are paused until the ramp completes
+- After ramp, requests begin according to each user's schedule
+
+**Extensible Design**
+The workload generation system is modular, supporting different distribution strategies through the `WorkloadTrendStrategy` interface. Currently, the uniform distribution strategy ensures consistent workload throughout the experiment. Future strategies could implement peak hours, circadian patterns, or other realistic trends.
+
+## Workload Timing (Legacy)
 
 ## Offline Maven notes
 
