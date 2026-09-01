@@ -1,6 +1,7 @@
 package simulations.schedule;
 
 import java.util.Random;
+import java.util.concurrent.ThreadLocalRandom;
 
 /**
  * Uniform workload distribution strategy.
@@ -23,7 +24,7 @@ public class UniformWorkloadTrendStrategy implements WorkloadTrendStrategy {
     public long getRequestTimeMs(int requestIndex, int totalRequests, long simulationDurationMs) {
         if (totalRequests <= 1) {
             // Only one request: place it at a random time in the first half of simulation
-            return random.nextLong(simulationDurationMs / 2);
+            return randomLong(simulationDurationMs / 2);
         }
 
         // Divide the simulation into equal slots for each request
@@ -32,10 +33,22 @@ public class UniformWorkloadTrendStrategy implements WorkloadTrendStrategy {
         // Calculate the start of this request's time slot
         long slotStart = (long) requestIndex * slotSize;
 
-        // Place the request randomly within its slot
-        // This ensures distribution while preventing large gaps
-        long randomOffset = random.nextLong(slotSize);
+        // Place the request randomly within its slot.
+        // ThreadLocalRandom.nextLong(bound) is available in Java 8+ and is compatible
+        // with the project target runtime (Java 11), unlike Random.nextLong(long).
+        long randomOffset = randomLong(slotSize);
 
         return slotStart + randomOffset;
+    }
+
+    /**
+     * Returns a non-negative long between 0 (inclusive) and bound (exclusive).
+     * Java 11-compatible alternative to Random.nextLong(long).
+     */
+    private long randomLong(long bound) {
+        if (bound <= 0L) {
+            return 0L;
+        }
+        return ThreadLocalRandom.current().nextLong(bound);
     }
 }
