@@ -57,6 +57,7 @@ public final class SimulationConfig {
   private final int standardUnitsPerMinute;
   private final int proUnitsPerMinute;
   private final int unitsPerRequest;
+  private final int maxAccumulatedRequests;
   private final String prompt;
   private final int minOutputLength;
   private final int maxOutputLength;
@@ -87,6 +88,7 @@ public final class SimulationConfig {
     int standardUnitsPerMinute,
     int proUnitsPerMinute,
     int unitsPerRequest,
+    int maxAccumulatedRequests,
     String prompt,
     int minOutputLength,
     int maxOutputLength,
@@ -116,6 +118,7 @@ public final class SimulationConfig {
     this.standardUnitsPerMinute = standardUnitsPerMinute;
     this.proUnitsPerMinute = proUnitsPerMinute;
     this.unitsPerRequest = unitsPerRequest;
+    this.maxAccumulatedRequests = maxAccumulatedRequests;
     this.prompt = prompt;
     this.minOutputLength = minOutputLength;
     this.maxOutputLength = maxOutputLength;
@@ -209,6 +212,10 @@ public final class SimulationConfig {
     return unitsPerRequest;
   }
 
+  public int getMaxAccumulatedRequests() {
+    return maxAccumulatedRequests;
+  }
+
   public String getPrompt() {
     return prompt;
   }
@@ -246,9 +253,9 @@ public final class SimulationConfig {
     int basicCount = Math.min(total, (int) Math.floor(total * basicShare));
     int standardCount = Math.min(total - basicCount, (int) Math.floor(total * standardShare));
     int proCount = Math.max(0, total - basicCount - standardCount);
-    int basicUnits = Math.max(0, basicUnitsPerMinute) * Math.max(0, simulationMinutes);
-    int standardUnits = Math.max(0, standardUnitsPerMinute) * Math.max(0, simulationMinutes);
-    int proUnits = Math.max(0, proUnitsPerMinute) * Math.max(0, simulationMinutes);
+    int basicUnits = Math.max(0, basicUnitsPerMinute);
+    int standardUnits = Math.max(0, standardUnitsPerMinute);
+    int proUnits = Math.max(0, proUnitsPerMinute);
     double clampedHighShare = clamp(highUsageUserShare, 0.0, 1.0);
     double lowHourly = Math.max(0.0, lowUsageHourlyRequests);
     double highHourly = Math.max(0.0, highUsageHourlyRequests);
@@ -333,6 +340,7 @@ public final class SimulationConfig {
       readInt("STANDARD_UNITS_PER_MINUTE", 20),
       readInt("PRO_UNITS_PER_MINUTE", 40),
       readInt("UNITS_PER_REQUEST", 1),
+      readInt("MAX_ACCUMULATED_REQUESTS", 1),
       read("LLM_PROMPT", "Hello"),
       readInt("MIN_OUTPUT_LENGTH", 0),
       readInt("MAX_OUTPUT_LENGTH", 256),

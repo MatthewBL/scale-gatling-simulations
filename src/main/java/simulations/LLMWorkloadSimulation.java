@@ -142,7 +142,9 @@ public class LLMWorkloadSimulation extends Simulation {
       record.put("requestUrl", joinUrl(selectedBaseUrl, endpoint));
       record.put("targetRequests", schedule.getTargetRequests());
       record.put("requestIndex", 0);
-      record.put("remainingUnits", assignment.getInitialUnits());
+      record.put("unitsPerMinute", assignment.getInitialUnits());
+      record.put("accumulatedUnits", (double) unitsPerRequest);
+      record.put("lastRefillTimeMs", 0L);
       record.put("workloadSchedule", schedule);
       return record;
     }).iterator();
@@ -153,10 +155,26 @@ public class LLMWorkloadSimulation extends Simulation {
     .contentTypeHeader("application/json");
 
   private final ChainBuilder requestAttempt =
-    doIfOrElse(session -> session.getInt("remainingUnits") >= unitsPerRequest)
+    exec(this::refillQuota)
+      .doIfOrElse(session -> session.getDouble("accumulatedUnits") >= unitsPerRequest)
       .then(exec(http("llm-request").post("#{requestUrl}").body(StringBody(body)).check(checks))
-        .exec(session -> session.set("remainingUnits", session.getInt("remainingUnits") - unitsPerRequest)))
-      .orElse(exec(new InsufficientUnitsActionBuilder("llm-request-insufficient-units")).exitHere());
+        .exec(session -> session.set(
+          "accumulatedUnits", session.getDouble("accumulatedUnits") - unitsPerRequest)))
+      .orElse(exec(new InsufficientUnitsActionBuilder("llm-request-insufficient-units")));
+
+  private Session refillQuota(Session session) {
+    UserWorkloadSchedule schedule = (UserWorkloadSchedule) session.get("workloadSchedule");
+    int requestIndex = session.getInt("requestIndex");
+    long requestTimeMs = schedule.getRequestTimings().get(requestIndex);
+    long lastRefillTimeMs = session.getLong("lastRefillTimeMs");
+    long elapsedMs = Math.max(0L, requestTimeMs - lastRefillTimeMs);
+    double refill = session.getInt("unitsPerMinute") * (elapsedMs / 60_000.0);
+    double capacity = unitsPerRequest * (double) config.getMaxAccumulatedRequests();
+    double accumulatedUnits = Math.min(capacity,
+      session.getDouble("accumulatedUnits") + refill);
+    return session.set("accumulatedUnits", accumulatedUnits)
+      .set("lastRefillTimeMs", requestTimeMs);
+  }
 
   private final ScenarioBuilder scenario = scenario("LLM step-rate capacity")
     .feed(userFeeder)
@@ -181,8 +199,9 @@ public class LLMWorkloadSimulation extends Simulation {
 
   public LLMWorkloadSimulation() {
     if (config.getSimulationMinutes() <= 0 || config.getTotalUsers() < 0 || unitsPerRequest <= 0
-      || config.getUserRampMinutes() <= 0 || config.getLooseness() < 0) {
-      throw new IllegalArgumentException("SIMULATION_MINUTES, TOTAL_USERS, USER_RAMP_MINUTES, and LOOSENESS must be non-negative");
+      || config.getUserRampMinutes() <= 0 || config.getLooseness() < 0
+      || config.getMaxAccumulatedRequests() <= 0) {
+      throw new IllegalArgumentException("SIMULATION_MINUTES, TOTAL_USERS, USER_RAMP_MINUTES, LOOSENESS, and MAX_ACCUMULATED_REQUESTS must be valid");
     }
     setUp(scenario.injectOpen(
       rampUsers(config.getTotalUsers()).during(Duration.ofMinutes(config.getUserRampMinutes()))

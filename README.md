@@ -59,6 +59,12 @@ FINE_TUNED_TEST=5,8,10
 ```
 
 Each triplet is `basic,standard,pro` units per minute.
+Units are not a lifetime quota. In the simulation they refill continuously for
+each user at the configured rate. A request consumes `UNITS_PER_REQUEST` units, and
+`MAX_ACCUMULATED_REQUESTS` bounds the per-user burst capacity. The example uses
+`UNITS_PER_REQUEST=100` so integer unit budgets can represent fractions of a
+request per minute. A user that lacks units records `insufficient-units` for
+that attempt but remains in the simulation for later requests.
 
 ### 3. Run the simulation
 
@@ -135,6 +141,12 @@ For example, with 50,000 users and a 30-minute ramp:
 
 **Extensible Design**
 The workload generation system is modular, supporting different distribution strategies through the `WorkloadTrendStrategy` interface. Currently, the uniform distribution strategy ensures consistent workload throughout the experiment. Future strategies could implement peak hours, circadian patterns, or other realistic trends.
+
+The same reproducible stochastic demand schedule is used for all three
+experiments. Only the per-subscription unit budgets change. This models
+statistical multiplexing: the sum of subscription entitlements may be slightly
+above service capacity while users are independently active only part of the
+time.
 
 ## Workload Timing (Legacy)
 

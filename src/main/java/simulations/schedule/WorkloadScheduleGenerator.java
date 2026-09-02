@@ -66,9 +66,8 @@ public class WorkloadScheduleGenerator {
 
         UserWorkloadSchedule schedule = new UserWorkloadSchedule(assignment.getIndex(), targetRequests);
 
-        // Generate request timings
-        for (int i = 0; i < targetRequests; i++) {
-            long timeMs = trendStrategy.getRequestTimeMs(i, targetRequests, simulationDurationMs);
+        // Generate one stochastic demand trace; provisioning is applied later by the simulation.
+        for (long timeMs : trendStrategy.generateRequestTimes(assignment.getIndex(), targetRequests, simulationDurationMs)) {
             schedule.addRequestTiming(timeMs);
         }
 

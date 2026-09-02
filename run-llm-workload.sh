@@ -54,9 +54,9 @@ parse_case() {
 }
 
 cases=(
-  "under-provisioning:$(parse_case UNDER_PROVISIONING_TEST "${UNDER_PROVISIONING_TEST:-1,1,1}")"
+  "under-provisioning:$(parse_case UNDER_PROVISIONING_TEST "${UNDER_PROVISIONING_TEST:-10,20,30}")"
   "over-provisioning:$(parse_case OVER_PROVISIONING_TEST "${OVER_PROVISIONING_TEST:-10000,10000,10000}")"
-  "fine-tuned-provisioning:$(parse_case FINE_TUNED_TEST "${FINE_TUNED_TEST:-100,100,100}")"
+  "fine-tuned-provisioning:$(parse_case FINE_TUNED_TEST "${FINE_TUNED_TEST:-25,40,50}")"
 )
 
 for case in "${cases[@]}"; do

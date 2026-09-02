@@ -1,7 +1,9 @@
 package simulations.schedule;
 
 import java.util.Random;
-import java.util.concurrent.ThreadLocalRandom;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 
 /**
  * Uniform workload distribution strategy.
@@ -13,6 +15,16 @@ public class UniformWorkloadTrendStrategy implements WorkloadTrendStrategy {
 
     public UniformWorkloadTrendStrategy(Random random) {
         this.random = random;
+    }
+
+    @Override
+    public List<Long> generateRequestTimes(int userIndex, int totalRequests, long simulationDurationMs) {
+        List<Long> requestTimes = new ArrayList<>(totalRequests);
+        for (int requestIndex = 0; requestIndex < totalRequests; requestIndex += 1) {
+            requestTimes.add(randomLong(simulationDurationMs));
+        }
+        Collections.sort(requestTimes);
+        return requestTimes;
     }
 
     /**
@@ -49,6 +61,6 @@ public class UniformWorkloadTrendStrategy implements WorkloadTrendStrategy {
         if (bound <= 0L) {
             return 0L;
         }
-        return ThreadLocalRandom.current().nextLong(bound);
+        return (long) (random.nextDouble() * bound);
     }
 }
