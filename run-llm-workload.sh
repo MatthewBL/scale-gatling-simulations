@@ -85,3 +85,29 @@ for case in "${cases[@]}"; do
       -Dgatling.simulationClass=simulations.LLMWorkloadSimulation
   fi
 done
+
+# Record the oversubscription rate: the per-tier ratio of the fine-tuned unit
+# budgets to the under-provisioned ones (fine_tuned / under_provisioning), in
+# [basic, standard, pro] order, stored as exact decimals. One JSON object per
+# experiment is appended to results/oversubscription-rate.jsonl.
+summary_timestamp="$(date +%Y%m%d%H%M%S)"
+under_for_rate="$(parse_case UNDER_PROVISIONING_TEST "${UNDER_PROVISIONING_TEST:-10,20,30}")"
+fine_for_rate="$(parse_case FINE_TUNED_TEST "${FINE_TUNED_TEST:-25,40,50}")"
+IFS=":" read -r underBasic underStandard underPro <<< "$under_for_rate"
+IFS=":" read -r fineBasic fineStandard finePro <<< "$fine_for_rate"
+oversubscription="$(awk -v ub="$underBasic" -v us="$underStandard" -v up="$underPro" \
+  -v fb="$fineBasic" -v fs="$fineStandard" -v fp="$finePro" 'BEGIN {
+    CONVFMT = "%.17g"
+    OFMT = "%.17g"
+    r1 = (ub == 0) ? "null" : fb / ub
+    r2 = (us == 0) ? "null" : fs / us
+    r3 = (up == 0) ? "null" : fp / up
+    printf "[%s, %s, %s]", r1, r2, r3
+  }')"
+mkdir -p "$ROOT_DIR/results"
+printf '{"run_timestamp":"%s","under_provisioning":[%s,%s,%s],"fine_tuned":[%s,%s,%s],"oversubscription_rate":%s}\n' \
+  "$summary_timestamp" "$underBasic" "$underStandard" "$underPro" \
+  "$fineBasic" "$fineStandard" "$finePro" "$oversubscription" \
+  >> "$ROOT_DIR/results/oversubscription-rate.jsonl"
+echo "Oversubscription rate (fine-tuned / under-provisioned, basic/standard/pro): $oversubscription"
+echo "Oversubscription rate stored in $ROOT_DIR/results/oversubscription-rate.jsonl"

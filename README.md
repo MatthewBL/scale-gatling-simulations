@@ -66,6 +66,22 @@ each user at the configured rate. A request consumes `UNITS_PER_REQUEST` units, 
 request per minute. A user that lacks units records `insufficient-units` for
 that attempt but remains in the simulation for later requests.
 
+### Oversubscription rate
+
+When an experiment ends, `run-llm-workload.sh` appends one JSON object per run to
+`results/oversubscription-rate.jsonl` (the `results/` directory is created when
+needed). The oversubscription rate is the per-tier relative difference between
+the fine-tuned and under-provisioned unit budgets, in `[basic, standard, pro]`
+order, stored as exact decimals:
+
+    oversubscription_rate[i] = FINE_TUNED_TEST[i] / UNDER_PROVISIONING_TEST[i]
+
+With the example values above (`FINE_TUNED_TEST=5,8,10` and
+`UNDER_PROVISIONING_TEST=2,3,4`) the rate is `[2.5, 2.67, 2.5]`. A zero
+under-provisioned budget is stored as `null` for that tier. The same value is
+shown by `estimate_requests.py` (text or `--json` report) without running the
+simulation.
+
 ### 3. Run the simulation
 
 On Linux, macOS, or WSL:

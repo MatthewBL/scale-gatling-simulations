@@ -150,6 +150,15 @@ def parse_triplet(name: str, value: str) -> list:
     return [int(p) for p in parts]
 
 
+def oversubscription_rate(settings: dict) -> list:
+    """Per-tier ratio of fine-tuned to under-provisioned unit budgets,
+    in [basic, standard, pro] order. A zero under-provisioned budget yields
+    None for that tier."""
+    under = parse_triplet("UNDER_PROVISIONING_TEST", settings["UNDER_PROVISIONING_TEST"])
+    fine = parse_triplet("FINE_TUNED_TEST", settings["FINE_TUNED_TEST"])
+    return [fine[i] / under[i] if under[i] != 0 else None for i in range(len(under))]
+
+
 def usage_split(count: int, high_share: float, low_hourly: float, high_hourly: float) -> list:
     """Mirror of SimulationConfig.appendAssignments:
     the first round(count * highShare) users of a tier are high usage."""
@@ -351,6 +360,11 @@ def print_cases(report: dict) -> None:
         print(f"  verdict                        : {verdict}")
 
 
+def print_oversubscription(settings: dict) -> None:
+    print("Oversubscription rate (fine-tuned / under-provisioned, basic/standard/pro)")
+    print(f"  {oversubscription_rate(settings)}")
+
+
 def print_grand(report: dict) -> None:
     g = report["grand_total"]
     print("Grand total across the 3 sequential runs")
@@ -371,6 +385,8 @@ def print_report(settings: dict, env_path: str, user_info: dict, units_per_reque
     print_schedule(user_info)
     print()
     print_cases(report)
+    print()
+    print_oversubscription(settings)
     print()
     print_grand(report)
 
@@ -404,6 +420,7 @@ def main(argv=None) -> int:
             "env_file": env_path,
             "config": settings,
             "users": user_info,
+            "oversubscription_rate": oversubscription_rate(settings),
             "cases": [
                 {
                     "name": c["name"],
