@@ -176,26 +176,38 @@ public class LLMWorkloadSimulation extends Simulation {
       .set("lastRefillTimeMs", requestTimeMs);
   }
 
-  private final ScenarioBuilder scenario = scenario("LLM step-rate capacity")
-    .feed(userFeeder)
-    .exec(rendezVous(config.getTotalUsers()))
-    .pause(session -> {
-      UserWorkloadSchedule schedule = (UserWorkloadSchedule) session.get("workloadSchedule");
-      return Duration.ofMillis(schedule.getFirstRequestDelayMs());
-    })
-    .repeat("#{targetRequests}").on(
-      doIf(session -> session.getInt("targetRequests") > 0)
-        .then(
-          doIf(session -> session.getInt("requestIndex") > 0)
-            .then(pause(session -> {
-              UserWorkloadSchedule schedule = (UserWorkloadSchedule) session.get("workloadSchedule");
-              int requestIndex = session.getInt("requestIndex");
-              return Duration.ofMillis(schedule.getRequestIntervalMs(requestIndex - 1));
-            }))
-          .exec(requestAttempt)
-          .exec(session -> session.set("requestIndex", session.getInt("requestIndex") + 1))
-        )
-    );
+  private final ScenarioBuilder scenario = buildScenario();
+
+  private ScenarioBuilder buildScenario() {
+    ScenarioBuilder builder = scenario("LLM step-rate capacity")
+      .feed(userFeeder);
+    if (!config.getInteractDuringRamp()) {
+      // Default behavior: hold every user at the rendezvous until the full ramp
+      // has completed, then release everyone together.
+      builder = builder.exec(rendezVous(config.getTotalUsers()));
+    }
+    // When INTERACT_DURING_RAMP is enabled, users start their request loop as
+    // soon as they are injected, so the service sees a linearly growing load
+    // during the ramp and the unit limits apply from the very beginning.
+    return builder
+      .pause(session -> {
+        UserWorkloadSchedule schedule = (UserWorkloadSchedule) session.get("workloadSchedule");
+        return Duration.ofMillis(schedule.getFirstRequestDelayMs());
+      })
+      .repeat("#{targetRequests}").on(
+        doIf(session -> session.getInt("targetRequests") > 0)
+          .then(
+            doIf(session -> session.getInt("requestIndex") > 0)
+              .then(pause(session -> {
+                UserWorkloadSchedule schedule = (UserWorkloadSchedule) session.get("workloadSchedule");
+                int requestIndex = session.getInt("requestIndex");
+                return Duration.ofMillis(schedule.getRequestIntervalMs(requestIndex - 1));
+              }))
+            .exec(requestAttempt)
+            .exec(session -> session.set("requestIndex", session.getInt("requestIndex") + 1))
+          )
+      );
+  }
 
   public LLMWorkloadSimulation() {
     if (config.getSimulationMinutes() <= 0 || config.getTotalUsers() < 0 || unitsPerRequest <= 0

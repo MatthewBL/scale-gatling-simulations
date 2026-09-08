@@ -132,12 +132,32 @@ Each user's request count can vary around their assigned profile using the `LOOS
 After the ramp-up phase completes, users begin sending requests at random intervals instead of in rigid batches. This creates a more realistic initial load pattern.
 
 **User Ramp-up Phase**
-Users arrive evenly during `USER_RAMP_MINUTES` and send no requests during that phase. After all users arrive, they begin sending requests according to their generated schedules.
+By default, users arrive evenly during `USER_RAMP_MINUTES` and send no requests during that phase. After all users arrive, they begin sending requests according to their generated schedules.
 
 For example, with 50,000 users and a 30-minute ramp:
 - ~27.8 users per second join the simulation
 - All requests are paused until the ramp completes
 - After ramp, requests begin according to each user's schedule
+
+**Interacting During the Ramp**
+Set `INTERACT_DURING_RAMP=true` to let users start sending requests as soon as they
+join the simulation instead of waiting for the full ramp to complete:
+
+```dotenv
+INTERACT_DURING_RAMP=true
+```
+
+With this option:
+- The rendezvous barrier is skipped, so each user's schedule starts when that user is
+  injected rather than when the last user arrives
+- Load grows linearly during the ramp (each arriving user immediately begins their
+  pause → request loop)
+- Unit limits, refills, and `insufficient-units` accounting are active from the very
+  first arrivals; no other setting changes
+- The total run envelope stays `USER_RAMP_MINUTES + SIMULATION_MINUTES`
+
+Leave it unset or set to `false` to keep the default behavior of waiting until all
+users have arrived.
 
 **Extensible Design**
 The workload generation system is modular, supporting different distribution strategies through the `WorkloadTrendStrategy` interface. Currently, the uniform distribution strategy ensures consistent workload throughout the experiment. Future strategies could implement peak hours, circadian patterns, or other realistic trends.

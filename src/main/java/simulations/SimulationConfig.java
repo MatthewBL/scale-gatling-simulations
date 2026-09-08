@@ -65,6 +65,7 @@ public final class SimulationConfig {
   private final int firstRequestBatchSize;
   private final int firstRequestTurnIntervalSeconds;
   private final int looseness;
+  private final boolean interactDuringRamp;
 
   public SimulationConfig(
     String baseUrl,
@@ -95,7 +96,8 @@ public final class SimulationConfig {
     int userRampMinutes,
     int firstRequestBatchSize,
     int firstRequestTurnIntervalSeconds,
-    int looseness
+    int looseness,
+    boolean interactDuringRamp
   ) {
     this.baseUrl = baseUrl;
     this.tunnelUrls = Collections.unmodifiableList(new ArrayList<>(tunnelUrls));
@@ -126,6 +128,7 @@ public final class SimulationConfig {
     this.firstRequestBatchSize = firstRequestBatchSize;
     this.firstRequestTurnIntervalSeconds = firstRequestTurnIntervalSeconds;
     this.looseness = looseness;
+    this.interactDuringRamp = interactDuringRamp;
   }
 
   public String getBaseUrl() {
@@ -244,6 +247,10 @@ public final class SimulationConfig {
     return looseness;
   }
 
+  public boolean getInteractDuringRamp() {
+    return interactDuringRamp;
+  }
+
   public List<String> effectiveBaseUrls() {
     return tunnelUrls.isEmpty() ? List.of(baseUrl) : tunnelUrls;
   }
@@ -347,7 +354,8 @@ public final class SimulationConfig {
       readInt("USER_RAMP_MINUTES", 30),
       readInt("FIRST_REQUEST_BATCH_SIZE", 500),
       readInt("FIRST_REQUEST_TURN_INTERVAL_SECONDS", 2),
-      readInt("LOOSENESS", 0)
+      readInt("LOOSENESS", 0),
+      readBoolean("INTERACT_DURING_RAMP", false)
     );
   }
 
