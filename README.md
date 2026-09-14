@@ -131,6 +131,52 @@ or use the helper:
 SLURM writes logs to `gatling-llm-workload-<job-id>.out` and
 `gatling-llm-workload-<job-id>.err`.
 
+### 4. Run a queue of executions (`run_queue.py`)
+
+If you want to run several simulations back-to-back without watching for each one
+to finish — each with different parameters — use the queue runner. It executes
+runs strictly one at a time (FIFO): the next run starts only when the previous
+one ends, so you can enqueue several runs and walk away.
+
+A queued "run" is a small `.env`-style file holding only the parameters that
+differ from the base `.env`. The worker merges each run's overrides over `.env`
+and passes them as `-D` JVM properties (which take precedence), so no Java code
+changes are needed and any parameter can differ per run.
+
+```bash
+# Enqueue a run (any number, with different parameters)
+python run_queue.py add ramp-test --set TOTAL_USERS=500 --set SIMULATION_MINUTES=30
+python run_queue.py add full-load   --set TOTAL_USERS=20000 --set SIMULATION_MINUTES=60
+python run_queue.py add tuned       --set BASIC_UNITS_PER_MINUTE=50 --set STANDARD_UNITS_PER_MINUTE=100
+
+# Drain whatever is pending now, then exit:
+python run_queue.py start --once
+
+# Or keep watching for newly added runs until Ctrl-C (fire-and-forget):
+python run_queue.py start
+```
+
+Other commands: `python run_queue.py run <name> --dry-run` (preview the exact
+Maven command for one run), `python run_queue.py list`, and
+`python run_queue.py clear`.
+
+Directory layout (created on demand, git-ignored):
+
+```
+queue/pending/<name>.env    enqueued, waiting
+queue/running/<name>.env    currently executing
+queue/done/<name>.env       finished OK
+queue/failed/<name>.env     finished with an error
+results/runs.jsonl          append-only per-run audit log
+logs/<runId>.log            per-run Gatling console output
+```
+
+Each run gets a unique `runId=<name>-<timestamp>`, so its Gatling report lands in
+its own `target/gatling/<runId>/` directory. `run_queue.py` works on Windows
+(`mvnw.cmd`) and Linux/SLURM (`./mvnw`); `run-llm-workload.sh` remains available
+for the three-case provisioning experiment (or its cases can be enqueued as three
+separate runs).
+
 ## Workload Timing & Generation
 
 Before the simulation starts, a modular workload schedule generator creates a precise request schedule for each user. This approach offers several advantages:
