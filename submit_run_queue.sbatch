@@ -6,7 +6,7 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=8G
-#SBATCH --time=09:00:00
+#SBATCH --time=24:00:00
 #SBATCH --nodelist=c06
 
 # Drain or watch the run queue on a dedicated compute node. Runs from
