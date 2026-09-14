@@ -310,6 +310,9 @@ def cmd_start(args) -> None:
             all_ok = _run_one(os.path.join(PENDING_DIR, f)) and all_ok
         if args.once:
             print("Queue drained (all ok=%s)." % all_ok)
+            if not all_ok:
+                # Propagate failures so SLURM marks the job FAILED.
+                sys.exit(1)
             break
 
 

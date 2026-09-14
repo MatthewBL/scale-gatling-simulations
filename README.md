@@ -131,34 +131,41 @@ or use the helper:
 SLURM writes logs to `gatling-llm-workload-<job-id>.out` and
 `gatling-llm-workload-<job-id>.err`.
 
+> For running arbitrary experiments as a queue of simulations (each with its own
+> parameters), see [Section 4](#4-run-a-queue-of-executions-run_queuepy) — that
+> is the intended way to run queued workloads on SLURM.
+
 ### 4. Run a queue of executions (`run_queue.py`)
 
-If you want to run several simulations back-to-back without watching for each one
-to finish — each with different parameters — use the queue runner. It executes
-runs strictly one at a time (FIFO): the next run starts only when the previous
-one ends, so you can enqueue several runs and walk away.
+`run_queue.py` runs several simulations back-to-back (strictly one at a time,
+FIFO) so you never have to watch for one execution to end before starting the
+next — enqueue as many runs as you want, each with different parameters, and the
+worker picks them up automatically.
 
-A queued "run" is a small `.env`-style file holding only the parameters that
-differ from the base `.env`. The worker merges each run's overrides over `.env`
-and passes them as `-D` JVM properties (which take precedence), so no Java code
-changes are needed and any parameter can differ per run.
+A queued "run" is a small `.env`-style file in `queue/pending/<name>.env`
+holding only the parameters that differ from the base `.env`. The worker merges
+each run's overrides over `.env` and passes them as `-D` JVM properties (which
+take precedence), so no Java code changes are needed and *any* parameter
+(`TOTAL_USERS`, `SIMULATION_MINUTES`, `BASIC/STANDARD/PRO_UNITS_PER_MINUTE`,
+`LLM_URL`, `LLM_PROMPT`, ...) can differ per run.
+
+Commands (run from the repository directory):
 
 ```bash
-# Enqueue a run (any number, with different parameters)
-python run_queue.py add ramp-test --set TOTAL_USERS=500 --set SIMULATION_MINUTES=30
-python run_queue.py add full-load   --set TOTAL_USERS=20000 --set SIMULATION_MINUTES=60
-python run_queue.py add tuned       --set BASIC_UNITS_PER_MINUTE=50 --set STANDARD_UNITS_PER_MINUTE=100
-
-# Drain whatever is pending now, then exit:
-python run_queue.py start --once
-
-# Or keep watching for newly added runs until Ctrl-C (fire-and-forget):
-python run_queue.py start
+python run_queue.py add <name> [--set KEY=VALUE ...] [--env-file PATH]
+    Enqueue a run named <name>. --set overrides a parameter (repeatable);
+    --env-file imports overrides from an .env-style file.
+python run_queue.py start [--once]
+    Process the queue. --once drains what is pending now, then exits with
+    code 0 (or 1 if any run failed). Without --once it keeps polling for
+    newly added runs until Ctrl-C.
+python run_queue.py run <name> --dry-run
+    Print the exact Maven command for one run without executing it.
+python run_queue.py list [--json]
+    Show pending / running / done / failed items and recent activity.
+python run_queue.py clear [--done] [--failed] [--all]
+    Remove processed run files (done and failed by default).
 ```
-
-Other commands: `python run_queue.py run <name> --dry-run` (preview the exact
-Maven command for one run), `python run_queue.py list`, and
-`python run_queue.py clear`.
 
 Directory layout (created on demand, git-ignored):
 
@@ -173,9 +180,167 @@ logs/<runId>.log            per-run Gatling console output
 
 Each run gets a unique `runId=<name>-<timestamp>`, so its Gatling report lands in
 its own `target/gatling/<runId>/` directory. `run_queue.py` works on Windows
-(`mvnw.cmd`) and Linux/SLURM (`./mvnw`); `run-llm-workload.sh` remains available
-for the three-case provisioning experiment (or its cases can be enqueued as three
-separate runs).
+(`mvnw.cmd`) and Linux/SLURM (`./mvnw`).
+
+#### 4.1 Quick start (local)
+
+```bash
+# Enqueue three runs with different parameters:
+python run_queue.py add ramp-test --set TOTAL_USERS=500 --set SIMULATION_MINUTES=30
+python run_queue.py add full-load --set TOTAL_USERS=20000 --set SIMULATION_MINUTES=60
+python run_queue.py add tuned     --set BASIC_UNITS_PER_MINUTE=50 --set STANDARD_UNITS_PER_MINUTE=100
+
+# Drain the queue (runs execute one at a time in enqueue order):
+python run_queue.py start --once        # exit code 1 if any run failed
+
+# Or keep running until Ctrl-C, picking up runs as they are added:
+python run_queue.py start
+```
+
+#### 4.2 Running the queue on SLURM (recommended)
+
+SLURM is the intended deployment for long experiments. A batch job is allocated a
+dedicated compute node, loads Java 11, and drains `queue/pending/` one run at a
+time. Enqueue everything first, submit the job, and collect the results when it
+finishes — no need to watch anything.
+
+> `queue/` and `.env` are git-ignored runtime state, so **enqueue directly on the
+> cluster** in the repository directory (on the shared filesystem), or copy the
+> files over with `scp`/`rsync`. Do not rely on git to transfer queued runs.
+
+**Step 1 — prepare (on the cluster login node).** Make sure the repository
+contains a valid `.env`, and that Java 11 and Python 3 are available:
+
+```bash
+cd ~/scale-gatling-simulations
+module load openjdk/11          # same module used by submit_llm_workload.sbatch
+python3 --version               # run_queue.py needs only the Python 3 standard library
+```
+
+**Step 2 — enqueue your runs.** `run_queue.py` must run in the same directory
+that SLURM will process (the submit directory), because that is where it reads
+`.env` and `queue/`:
+
+```bash
+python3 run_queue.py add under-provisioning --set TOTAL_USERS=10000 --set BASIC_UNITS_PER_MINUTE=25 --set STANDARD_UNITS_PER_MINUTE=50 --set PRO_UNITS_PER_MINUTE=75
+python3 run_queue.py add over-provisioning --set BASIC_UNITS_PER_MINUTE=10000 --set STANDARD_UNITS_PER_MINUTE=10000 --set PRO_UNITS_PER_MINUTE=10000
+python3 run_queue.py add fine-tuned-provisioning --set BASIC_UNITS_PER_MINUTE=50 --set STANDARD_UNITS_PER_MINUTE=100 --set PRO_UNITS_PER_MINUTE=150
+python3 run_queue.py list        # sanity-check the pending queue
+```
+
+**Step 3 — submit the batch job:**
+
+```bash
+chmod u+x run_queue.py submit_run_queue.sbatch submit_run_queue.sh
+sbatch submit_run_queue.sbatch            # default node (c06), 'once' mode
+sbatch --nodelist=c07 submit_run_queue.sbatch
+./submit_run_queue.sh c07                 # helper, same as above
+sbatch --time=06:00:00 submit_run_queue.sbatch   # override the wall-clock limit
+```
+
+The job runs `python3 run_queue.py start --once`: it drains the queue, then exits
+with code 0 (drained, or nothing pending) or 1 (at least one run failed), so
+SLURM reports the job as `COMPLETED` or `FAILED` accordingly.
+
+**Step 4 — monitor.** The worker prints one line per run start/end to the job
+output file; the queue state and audit log are updated on disk:
+
+```bash
+squeue -u "$USER"
+tail -f run-queue-<job-id>.out            # live worker progress (<job-id> from sbatch/squeue)
+python3 run_queue.py list                 # queue state (run from the submit directory)
+```
+
+**Step 5 — collect results** once the job is `COMPLETED`/`FAILED`
+(check with `sacct -j <job-id>`):
+
+```
+target/gatling/<runId>/    Gatling reports, one directory per run
+results/runs.jsonl         per-run audit log (params, runId, status, exit code)
+logs/<runId>.log           per-run console output (for debugging failed runs)
+queue/done/                run files of finished runs
+queue/failed/              run files that failed (the worker keeps going)
+```
+
+##### The batch script (`submit_run_queue.sbatch`)
+
+```bash
+#!/usr/bin/env bash
+#SBATCH --job-name=gatling-run-queue
+#SBATCH --output=run-queue-%j.out
+#SBATCH --error=run-queue-%j.err
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=4
+#SBATCH --mem=8G
+#SBATCH --time=09:00:00
+#SBATCH --nodelist=c06
+
+# Drain or watch the run queue on a dedicated compute node. Runs from
+# queue/pending/ are executed strictly one at a time (FIFO) by run_queue.py.
+#
+# Usage:
+#   sbatch submit_run_queue.sbatch            # once mode (default): drain queue, then exit
+#   sbatch submit_run_queue.sbatch watch      # watch mode: keep polling for new runs
+#   sbatch --nodelist=c07 submit_run_queue.sbatch
+#   sbatch --time=12:00:00 submit_run_queue.sbatch   # override the wall-clock limit
+
+set -euo pipefail
+ROOT_DIR="${SLURM_SUBMIT_DIR}"
+cd "$ROOT_DIR"
+
+# Java 11 (same module as submit_llm_workload.sbatch):
+if command -v module >/dev/null 2>&1; then
+  module load openjdk/11
+fi
+command -v java >/dev/null 2>&1 || { echo "ERROR: Java is not available." >&2; exit 1; }
+
+# Python 3 (standard library only):
+if command -v python3 >/dev/null 2>&1; then PYTHON=python3
+elif command -v python >/dev/null 2>&1; then PYTHON=python
+else echo "ERROR: python3 is not available." >&2; exit 1; fi
+
+[[ -f .env ]] || { echo "ERROR: .env was not found in $ROOT_DIR." >&2; exit 1; }
+
+mode="${1:-once}"               # 'once' (default) or 'watch'
+case "$mode" in
+  once|watch) ;;
+  *) echo "ERROR: unknown mode '$mode'." >&2; exit 1 ;;
+esac
+
+echo "SLURM job: ${SLURM_JOB_ID:-unknown}  Node: ${SLURM_JOB_NODELIST:-unknown}"
+if [[ "$mode" == once ]]; then
+  exec "$PYTHON" run_queue.py start --once   # exits 1 if any run failed
+else
+  exec "$PYTHON" run_queue.py start          # keep polling until --time expires
+fi
+```
+
+What matters in it:
+
+- `#SBATCH --time=...` is the **total** allowed wall time for the whole queue.
+  Budget roughly `(USER_RAMP_MINUTES + SIMULATION_MINUTES)` per scheduled run plus
+  10–15 minutes of overhead per run (schedule generation, model resolution, and
+  report writing). If a run starts too close to the limit, the job is killed
+  mid-run — the interrupted item is left in `queue/running/` and automatically
+  requeued by the next `start`.
+- `#SBATCH --nodelist=` is overridable per submission with
+  `sbatch --nodelist=c07 ...` or via the `./submit_run_queue.sh c07` helper.
+- `once` mode is the recommended pattern: enqueue everything up front, bound the
+  job time, and let the worker drain the queue. Use the `watch` argument instead
+  if you want to keep adding runs while the job is alive; give `--time` enough
+  headroom to cover all the runs you plan to add.
+
+Design notes:
+
+- Runs execute **strictly sequentially in enqueue order**, which is the whole
+  point of the queue. Do **not** convert this to a SLURM job array — array tasks
+  run concurrently and would defeat the sequential FIFO behavior.
+- A failed run does not stop the worker; the job only exits non-zero at the end
+  (`--once` mode). Check `logs/<runId>.log` and `results/runs.jsonl` for details.
+- `run-llm-workload.sh` plus `submit_llm_workload.sbatch` remain for the fixed
+  three-case provisioning experiment; its three cases can also be enqueued as
+  three separate runs, as shown in Step 2 above.
 
 ## Workload Timing & Generation
 
