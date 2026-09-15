@@ -9,8 +9,11 @@
 #SBATCH --time=24:00:00
 #SBATCH --nodelist=c06
 
-# Drain or watch the run queue on a dedicated compute node. Runs from
-# queue/pending/ are executed strictly one at a time (FIFO) by run_queue.py.
+# Drain or watch the run queue on a dedicated compute node. Items from
+# queue/pending/ are executed strictly one at a time (FIFO) by run_queue.py, and
+# each item first runs its three provisioning cases (under-provisioning,
+# over-provisioning, fine-tuned-provisioning) in sequence, so the next item only
+# starts once all three cases of the current one have finished.
 #
 # Usage:
 #   sbatch submit_run_queue.sbatch            # once mode (default): drain queue, then exit
@@ -18,8 +21,12 @@
 #   sbatch --nodelist=c07 submit_run_queue.sbatch
 #   sbatch --time=12:00:00 submit_run_queue.sbatch   # override the wall-clock limit
 #
+# Wall-clock budget: one item costs about 3 x (USER_RAMP_MINUTES +
+# SIMULATION_MINUTES) plus 10-15 minutes of overhead per case, so with the default
+# .env (30 + 60 minutes) that is roughly 5 hours per queued run.
+#
 # Enqueue runs before (or during, in watch mode) from the submit directory:
-#   python3 run_queue.py add <name> --set KEY=VALUE ...
+#   python3 run_queue.py add <name> [--set KEY=VALUE ...] [--single]
 
 set -euo pipefail
 

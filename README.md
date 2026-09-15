@@ -15,7 +15,11 @@ quota failures.
 
 Three provisioning experiments run in sequence: under-provisioning,
 over-provisioning, and fine-tuned provisioning. Their tier quotas are read from
-`.env` and passed to each run as JVM properties.
+`.env` and passed to each case as JVM properties.
+
+Both entry points run the same three experiments: `run-llm-workload.sh` executes
+them directly, and one queued run in `run_queue.py` is a full sweep of the same
+three cases (see [Section 4](#4-run-a-queue-of-executions-run_queuepy)).
 
 ## Setup
 
@@ -70,7 +74,10 @@ that attempt but remains in the simulation for later requests.
 
 When an experiment ends, `run-llm-workload.sh` appends one JSON object per run to
 `results/oversubscription-rate.jsonl` (the `results/` directory is created when
-needed). The oversubscription rate is the per-tier relative difference between
+needed). A queued run does the same once its three cases have completed; its
+record additionally carries the queue item name (`run`) and the three runIds
+(`run_ids`) so queue and script records can be told apart and correlated. The
+oversubscription rate is the per-tier relative difference between
 the fine-tuned and under-provisioned unit budgets, in `[basic, standard, pro]`
 order, stored as exact decimals:
 
@@ -137,32 +144,50 @@ SLURM writes logs to `gatling-llm-workload-<job-id>.out` and
 
 ### 4. Run a queue of executions (`run_queue.py`)
 
-`run_queue.py` runs several simulations back-to-back (strictly one at a time,
-FIFO) so you never have to watch for one execution to end before starting the
-next — enqueue as many runs as you want, each with different parameters, and the
-worker picks them up automatically.
+`run_queue.py` runs several sweeps back-to-back (strictly one at a time, FIFO) so
+you never have to watch for one execution to end before starting the next —
+enqueue as many runs as you want, each with different parameters, and the worker
+picks them up automatically.
+
+**One queued run is a full sweep: the three provisioning experiments, run in
+sequence.** The worker expands the item into `under-provisioning`,
+`over-provisioning` and `fine-tuned-provisioning` (the same order as
+`run-llm-workload.sh`), each as its own Gatling execution with its own runId, log
+file and report directory. The next item in the queue only starts once **all
+three cases** of the current item have finished.
 
 A queued "run" is a small `.env`-style file in `queue/pending/<name>.env`
-holding only the parameters that differ from the base `.env`. The worker merges
-each run's overrides over `.env` and passes them as `-D` JVM properties (which
-take precedence), so no Java code changes are needed and *any* parameter
-(`TOTAL_USERS`, `SIMULATION_MINUTES`, `BASIC/STANDARD/PRO_UNITS_PER_MINUTE`,
+holding only the parameters that differ from the base `.env`, plus
+`QUEUE_MODE=SWEEP`. For each case the worker merges the item's overrides over
+`.env`, sets that case's tier quotas from its `*_TEST` triplet and passes every
+merged key as a `-D` JVM property (which takes precedence), so no Java code
+changes are needed and *any* parameter (`TOTAL_USERS`, `SIMULATION_MINUTES`,
 `LLM_URL`, `LLM_PROMPT`, ...) can differ per run.
+
+A case that exits non-zero stops the sweep (mirroring the `set -e` behavior of
+`run-llm-workload.sh`): the remaining cases are skipped, the item is moved to
+`queue/failed/`, and the worker continues with the next item. Only completed
+sweeps append a record to `results/oversubscription-rate.jsonl`.
+
+`add --single` enqueues a plain isolated execution (one run, no case expansion)
+for spot checks and parameter experiments.
 
 Commands (run from the repository directory):
 
 ```bash
-python run_queue.py add <name> [--set KEY=VALUE ...] [--env-file PATH]
-    Enqueue a run named <name>. --set overrides a parameter (repeatable);
-    --env-file imports overrides from an .env-style file.
+python run_queue.py add <name> [--set KEY=VALUE ...] [--env-file PATH] [--single]
+    Enqueue a run named <name> (a three-case sweep unless --single is given).
+    --set overrides a parameter (repeatable); --env-file imports overrides from
+    an .env-style file. --single enqueues one isolated execution.
 python run_queue.py start [--once]
     Process the queue. --once drains what is pending now, then exits with
     code 0 (or 1 if any run failed). Without --once it keeps polling for
     newly added runs until Ctrl-C.
 python run_queue.py run <name> --dry-run
-    Print the exact Maven command for one run without executing it.
+    Print the exact Maven command of every case without executing it.
 python run_queue.py list [--json]
-    Show pending / running / done / failed items and recent activity.
+    Show pending / running / done / failed items (with their mode) and recent
+    activity.
 python run_queue.py clear [--done] [--failed] [--all]
     Remove processed run files (done and failed by default).
 ```
@@ -171,26 +196,34 @@ Directory layout (created on demand, git-ignored):
 
 ```
 queue/pending/<name>.env    enqueued, waiting
-queue/running/<name>.env    currently executing
-queue/done/<name>.env       finished OK
-queue/failed/<name>.env     finished with an error
-results/runs.jsonl          append-only per-run audit log
-logs/<runId>.log            per-run Gatling console output
+queue/running/<name>.env    claimed; its sweep is executing
+queue/done/<name>.env       all cases finished OK
+queue/failed/<name>.env     at least one case failed
+results/runs.jsonl          append-only audit log (item events + per-case events)
+results/oversubscription-rate.jsonl  one record per completed sweep
+logs/<runId>.log            per-case Gatling console output
 ```
 
-Each run gets a unique `runId=<name>-<timestamp>`, so its Gatling report lands in
-its own `target/gatling/<runId>/` directory. `run_queue.py` works on Windows
-(`mvnw.cmd`) and Linux/SLURM (`./mvnw`).
+Each **case** gets a unique `runId=<name>-<case>-<timestamp>`, so its Gatling
+report lands in its own `target/gatling/<runId>/` directory (a `--single` item uses
+`runId=<name>-<timestamp>`). `run_queue.py` works on Windows (`mvnw.cmd`) and
+Linux/SLURM (`./mvnw`).
 
 #### 4.1 Quick start (local)
 
 ```bash
-# Enqueue three runs with different parameters:
-python run_queue.py add ramp-test --set TOTAL_USERS=500 --set SIMULATION_MINUTES=30
+# Enqueue two sweeps with different parameters (3 cases each = 6 executions):
+python run_queue.py add baseline  --set TOTAL_USERS=500   --set SIMULATION_MINUTES=30
 python run_queue.py add full-load --set TOTAL_USERS=20000 --set SIMULATION_MINUTES=60
-python run_queue.py add tuned     --set BASIC_UNITS_PER_MINUTE=50 --set STANDARD_UNITS_PER_MINUTE=100
 
-# Drain the queue (runs execute one at a time in enqueue order):
+# Or a single isolated execution (1 execution):
+python run_queue.py add spot-check --single --set BASIC_UNITS_PER_MINUTE=50
+
+# Inspect the plan before committing hours of wall time:
+python run_queue.py run full-load --dry-run
+
+# Drain the queue (items run one at a time in enqueue order, and each item's
+# three cases run sequentially):
 python run_queue.py start --once        # exit code 1 if any run failed
 
 # Or keep running until Ctrl-C, picking up runs as they are added:
@@ -219,13 +252,24 @@ python3 --version               # run_queue.py needs only the Python 3 standard 
 
 **Step 2 — enqueue your runs.** `run_queue.py` must run in the same directory
 that SLURM will process (the submit directory), because that is where it reads
-`.env` and `queue/`:
+`.env` and `queue/`. One enqueued run already covers the whole experiment, because
+it sweeps the three provisioning cases (their quotas come from the `*_TEST`
+triplets in `.env`):
 
 ```bash
-python3 run_queue.py add under-provisioning --set TOTAL_USERS=10000 --set BASIC_UNITS_PER_MINUTE=25 --set STANDARD_UNITS_PER_MINUTE=50 --set PRO_UNITS_PER_MINUTE=75
-python3 run_queue.py add over-provisioning --set BASIC_UNITS_PER_MINUTE=10000 --set STANDARD_UNITS_PER_MINUTE=10000 --set PRO_UNITS_PER_MINUTE=10000
-python3 run_queue.py add fine-tuned-provisioning --set BASIC_UNITS_PER_MINUTE=50 --set STANDARD_UNITS_PER_MINUTE=100 --set PRO_UNITS_PER_MINUTE=150
-python3 run_queue.py list        # sanity-check the pending queue
+python3 run_queue.py add experiment-1 --set TOTAL_USERS=10000
+python3 run_queue.py add experiment-2 --set TOTAL_USERS=20000 --set SIMULATION_MINUTES=90
+python3 run_queue.py run experiment-1 --dry-run   # optional: show the 3 commands
+python3 run_queue.py list                         # sanity-check the pending queue
+```
+
+To change the tier quotas for one queued run, override its **triplets** — not the
+per-case `BASIC/STANDARD/PRO_UNITS_PER_MINUTE` keys, which the sweep derives from
+them (`add` rejects those on a sweep item):
+
+```bash
+python3 run_queue.py add generous \
+  --set UNDER_PROVISIONING_TEST=25,50,75 --set FINE_TUNED_TEST=60,120,180
 ```
 
 **Step 3 — submit the batch job:**
@@ -242,7 +286,7 @@ The job runs `python3 run_queue.py start --once`: it drains the queue, then exit
 with code 0 (drained, or nothing pending) or 1 (at least one run failed), so
 SLURM reports the job as `COMPLETED` or `FAILED` accordingly.
 
-**Step 4 — monitor.** The worker prints one line per run start/end to the job
+**Step 4 — monitor.** The worker prints one line per case start/end to the job
 output file; the queue state and audit log are updated on disk:
 
 ```bash
@@ -255,11 +299,12 @@ python3 run_queue.py list                 # queue state (run from the submit dir
 (check with `sacct -j <job-id>`):
 
 ```
-target/gatling/<runId>/    Gatling reports, one directory per run
-results/runs.jsonl         per-run audit log (params, runId, status, exit code)
-logs/<runId>.log           per-run console output (for debugging failed runs)
-queue/done/                run files of finished runs
-queue/failed/              run files that failed (the worker keeps going)
+target/gatling/<runId>/    Gatling reports, one directory per case
+results/runs.jsonl         audit log (item events plus per-case params, runId, status, exit code)
+results/oversubscription-rate.jsonl  one record per completed sweep
+logs/<runId>.log           per-case console output (for debugging failed runs)
+queue/done/                run files whose three cases all finished
+queue/failed/              run files with a failed case (the worker keeps going)
 ```
 
 ##### The batch script (`submit_run_queue.sbatch`)
@@ -273,11 +318,12 @@ queue/failed/              run files that failed (the worker keeps going)
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=8G
-#SBATCH --time=09:00:00
+#SBATCH --time=24:00:00
 #SBATCH --nodelist=c06
 
-# Drain or watch the run queue on a dedicated compute node. Runs from
-# queue/pending/ are executed strictly one at a time (FIFO) by run_queue.py.
+# Drain or watch the run queue on a dedicated compute node. Items from
+# queue/pending/ are executed strictly one at a time (FIFO) by run_queue.py, and
+# each item first runs its three provisioning cases in sequence.
 #
 # Usage:
 #   sbatch submit_run_queue.sbatch            # once mode (default): drain queue, then exit
@@ -319,11 +365,14 @@ fi
 What matters in it:
 
 - `#SBATCH --time=...` is the **total** allowed wall time for the whole queue.
-  Budget roughly `(USER_RAMP_MINUTES + SIMULATION_MINUTES)` per scheduled run plus
-  10–15 minutes of overhead per run (schedule generation, model resolution, and
-  report writing). If a run starts too close to the limit, the job is killed
-  mid-run — the interrupted item is left in `queue/running/` and automatically
-  requeued by the next `start`.
+  Budget `3 × (USER_RAMP_MINUTES + SIMULATION_MINUTES)` per queued run, because
+  every item sweeps three cases, plus 10–15 minutes of overhead per case
+  (schedule generation, model resolution, and report writing). With the default
+  `.env` (`USER_RAMP_MINUTES=30`, `SIMULATION_MINUTES=60`) that is roughly 5 hours
+  per item, so the `--time=24:00:00` default fits about four items. If a case
+  starts too close to the limit, the job is killed mid-run — the interrupted item
+  is left in `queue/running/` and automatically requeued by the next `start` (its
+  sweep restarts from the first case; reports already written are kept).
 - `#SBATCH --nodelist=` is overridable per submission with
   `sbatch --nodelist=c07 ...` or via the `./submit_run_queue.sh c07` helper.
 - `once` mode is the recommended pattern: enqueue everything up front, bound the
@@ -333,14 +382,18 @@ What matters in it:
 
 Design notes:
 
-- Runs execute **strictly sequentially in enqueue order**, which is the whole
-  point of the queue. Do **not** convert this to a SLURM job array — array tasks
-  run concurrently and would defeat the sequential FIFO behavior.
-- A failed run does not stop the worker; the job only exits non-zero at the end
-  (`--once` mode). Check `logs/<runId>.log` and `results/runs.jsonl` for details.
-- `run-llm-workload.sh` plus `submit_llm_workload.sbatch` remain for the fixed
-  three-case provisioning experiment; its three cases can also be enqueued as
-  three separate runs, as shown in Step 2 above.
+- Runs execute **strictly sequentially in enqueue order**, and the three cases of
+  a sweep run sequentially too, which is the whole point of the queue. Do **not**
+  convert this to a SLURM job array — array tasks run concurrently and would
+  defeat the sequential FIFO behavior.
+- A failed case does not stop the worker; the job only exits non-zero at the end
+  (`--once` mode). A sweep stops at its first failing case, so an item in
+  `queue/failed/` may have produced fewer than three reports. Check
+  `logs/<runId>.log`, the `finished` record in `results/runs.jsonl` (it carries
+  `failed_case` and `cases_completed`), or `run_queue.py list`.
+- `run-llm-workload.sh` plus `submit_llm_workload.sbatch` remain a direct,
+  non-queued way to run the same three-case experiment (identical quotas and
+  ordering). Use the queue when several sweeps should run unattended.
 
 ## Workload Timing & Generation
 
